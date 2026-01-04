@@ -31,7 +31,7 @@ export class IndexService {
           indexType,
         );
 
-        this.mergeTerms(indexMap, terms, chunk.pageNumbers);
+        this.mergeTerms(indexMap, terms, chunk.pageMap);
       }
 
       return this.buildFinalIndex(indexMap, indexType);
@@ -83,35 +83,49 @@ export class IndexService {
       { term: string; description?: string; pages: Set<number> }
     >,
     terms: { term: string; description?: string; pageHints?: number[] }[],
-    fallbackPages: number[],
+    pageMap: { [key: number]: string },
   ) {
-
     for (const t of terms) {
-      const key = this.normalize(t.term);
+      // ⛔ דילוג על מונח ריק או לא תקין
+      if (!t || typeof t.term !== 'string' || !t.term.trim()) continue;
 
-      if (!indexMap.has(key)) {
-        indexMap.set(key, {
-          term: t.term,
-          description: t.description,
-          pages: new Set(),
+      const normalizedKey = this.normalize(t.term);
+      if (!normalizedKey) continue;
+
+      // אם המונח לא קיים במפה – צור חדש
+      if (!indexMap.has(normalizedKey)) {
+        indexMap.set(normalizedKey, {
+          term: t.term.trim(),
+          description: typeof t.description === 'string' ? t.description : undefined,
+          pages: new Set<number>(),
         });
       }
 
-      const entry = indexMap.get(key)!;
+      const entry = indexMap.get(normalizedKey)!;
 
-      // אם יש pageHints – נשתמש בהם
-      const pagesToAdd =
-        t.pageHints && t.pageHints.length > 0
-          ? t.pageHints
-          : fallbackPages;//----------------------לא נכון לעשות כך - אם הוא לא משתמש במה ש AI הביא הוא צריך לעבור עמוד עמוד ולבדוק איפה זה נמצא
-      // --------------------וגם אם ה AI הביא - כדי לבדוק --- כאן צריך להשתמש ב- ------pageMap-----
+      let pagesToAdd: number[] = [];
 
+      // 1️⃣ קודם משתמשים ב-pageHints אם קיימים
+      if (Array.isArray(t.pageHints) && t.pageHints.length > 0) {
+        pagesToAdd = t.pageHints.filter(p => typeof p === 'number');
+      }
+      // 2️⃣ אחרת – עוברים על pageMap כדי למצוא את העמודים בהם מופיע המונח
+      else if (pageMap && Object.keys(pageMap).length > 0) {
+        for (const [pageNumStr, text] of Object.entries(pageMap)) {
+          const pageNum = parseInt(pageNumStr, 10);
+          if (!text) continue;
+          if (text.includes(t.term)) {
+            pagesToAdd.push(pageNum);
+          }
+        }
+      }
+
+      // מוסיפים את העמודים ל-Set
       for (const p of pagesToAdd) {
         entry.pages.add(p);
       }
     }
   }
-
 
   private buildFinalIndex(
     indexMap: Map<string, { term: string; description?: string; pages: Set<number> }>,

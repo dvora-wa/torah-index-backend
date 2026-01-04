@@ -53,6 +53,43 @@ export class GptService {
     }
   }
 
+  private getSystemPrompt(indexType: IndexType): string {
+    const BASE_PROMPT = `
+הטקסט כולל מקטעים בפורמט:
+[Page X]
+טקסט...
+
+אתה עורך אינדקס מקצועי.
+עליך:
+ לזהות מונחים רלוונטיים ולהחזיר במערך JSON בלבד:
+              [
+                {
+                  "term": "string",
+                  "description": "string | null",
+                  "pageHints": number[]
+                }
+              ]
+              אסור להחזיר טקסט חופשי.
+              אם אין מונחים – החזר []
+
+העמודים הם רמז בלבד. אל תנחש עמודים שלא מופיעים בטקסט.
+`.trim();;
+
+    const prompts: Record<IndexType, string> = {
+      [IndexType.SOURCES]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של מקורות תנכיים מהספר הנבחר.',
+      [IndexType.TOPICS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של נושאים מהספר הנבחר.',
+      [IndexType.PERSONS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של אישיים מהספר הנבחר.',
+    };
+    return `${BASE_PROMPT}\n${prompts[indexType]}`;
+
+  }
+
+}
+
+
+
+
+
   //   private buildPrompt(pages: Array<{ pageNumber: number; text: string }>, indexType: IndexType): string {
 
   //     const prompts: Record<IndexType, string> = {
@@ -77,32 +114,3 @@ export class GptService {
 
   //     return prompts[indexType];
   //   }
-
-  private getSystemPrompt(indexType: IndexType): string {
-    const BASE_PROMPT = `
-הטקסט כולל מקטעים בפורמט:
-[Page X]
-טקסט...
-
-עליך:
-- לזהות מונחים רלוונטיים
-- להחזיר מערך JSON בלבד
-- לכל מונח לצרף:
-  - term
-  - description (אם יש)
-  - pageHints: מערך מספרי עמודים שבהם המונח מופיע
-
-העמודים הם רמז בלבד. אל תנחש עמודים שלא מופיעים בטקסט.
-`.trim();;
-
-    const prompts: Record<IndexType, string> = {
-      [IndexType.SOURCES]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של מקורות תנכיים מהספר הנבחר.',
-      [IndexType.TOPICS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של נושאים מהספר הנבחר.',
-      [IndexType.PERSONS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של אישיים מהספר הנבחר.',
-    };
-    return `${BASE_PROMPT}\n${prompts[indexType]}`;
-
-  }
-
-}
-

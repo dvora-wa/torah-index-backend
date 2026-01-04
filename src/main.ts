@@ -7,12 +7,13 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // app.useGlobalFilters(new HttpExceptionFilter());
-
+  console.log(process.env.FRONTEND_URL);
   // Enable CORS for Angular frontend
 const allowedOrigins = (process.env.FRONTEND_URL ?? '')
   .split(',')
   .map(o => o.trim())
   .filter(Boolean);
+
 
   app.enableCors({
     origin: allowedOrigins,
