@@ -1,3 +1,4 @@
+
 import { Controller, Post, Body, UseInterceptors, UploadedFile, BadRequestException, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -45,7 +46,7 @@ export class IndexController {
     if (!body?.entries || !Array.isArray(body.entries)) {
       throw new BadRequestException('Invalid entries payload');
     }
-
+console.log(body.indexType)
     const paragraphs: Paragraph[] = [
       // כותרת ראשית
       new Paragraph({

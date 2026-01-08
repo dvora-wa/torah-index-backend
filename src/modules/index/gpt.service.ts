@@ -17,41 +17,58 @@ export class GptService {
   async analyzeChunk(
     chunkText: string,
     indexType: IndexType,
-  ): Promise<{ term: string; description?: string }[]> {
-
-    const response = await fetch(this.apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        input: [
-          {
-            role: 'system',
-            content: [{ type: 'input_text', text: this.getSystemPrompt(indexType) }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'input_text', text: chunkText }],
-          },
-        ],
-        temperature: 0,
-        max_output_tokens: 1000,
-      }),
-    });
-
-    const data = await response.json();
-    const text =
-      data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text || '[]';
+    attempt = 1,
+    maxAttempts = 3,
+  ): Promise<{ term: string; description?: string; pageHints?: number[] }[]> {
 
     try {
-      return JSON.parse(text);
-    } catch {
+      const response = await fetch(this.apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          input: [
+            {
+              role: 'system',
+              content: [{ type: 'input_text', text: this.getSystemPrompt(indexType) }],
+            },
+            {
+              role: 'user',
+              content: [{ type: 'input_text', text: chunkText }],
+            },
+          ],
+          temperature: 0,
+          max_output_tokens: 1000,
+        }),
+      });
+
+      const data = await response.json();
+
+      const text =
+        data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text ?? '[]';
+
+      const cleaned = text
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+
+      return JSON.parse(cleaned);
+
+    } catch (err) {
+      console.error(`Analyze failed (attempt ${attempt})`, err);
+
+      if (attempt < maxAttempts) {
+        console.warn(`Retrying analyzeChunk... (${attempt + 1}/${maxAttempts})`);
+        return this.analyzeChunk(chunkText, indexType, attempt + 1, maxAttempts);
+      }
+
       return [];
     }
   }
+
 
   private getSystemPrompt(indexType: IndexType): string {
     const BASE_PROMPT = `
@@ -62,26 +79,61 @@ export class GptService {
 אתה עורך אינדקס מקצועי.
 עליך:
  לזהות מונחים רלוונטיים ולהחזיר במערך JSON בלבד:
+ החזר פלט בפורמט JSON תקני בלבד.
+אין לעטוף את הפלט ב־גרשיים וכו או בבלוק קוד.
+      אין להוסיף הסברים, טקסט חופשי או הערות.
+      הפלט חייב להיות מערך JSON בלבד, שניתן לפענוח ישיר באמצעות JSON.parse().
               [
-                {
-                  "term": "string",
-                  "description": "string | null",
-                  "pageHints": number[]
-                }
-              ]
+        {
+          "term": "string",
+          "description": "string | null",
+          "pageHints": number[]
+        }
+      ]
+        אם אינך בטוח ב־100% שהמונח מתאים לסוג האינדקס – אל תחזיר אותו.
               אסור להחזיר טקסט חופשי.
-              אם אין מונחים – החזר []
+              אם אין מונחים – החזר[]
 
-העמודים הם רמז בלבד. אל תנחש עמודים שלא מופיעים בטקסט.
+העמודים הם רמז בלבד.אל תנחש עמודים שלא מופיעים בטקסט.
 `.trim();;
 
     const prompts: Record<IndexType, string> = {
-      [IndexType.SOURCES]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של מקורות תנכיים מהספר הנבחר.',
-      [IndexType.TOPICS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של נושאים מהספר הנבחר.',
-      [IndexType.PERSONS]: 'אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנך. צור אינדקסים מפורטים של אישיים מהספר הנבחר.',
-    };
-    return `${BASE_PROMPT}\n${prompts[indexType]}`;
+      [IndexType.SOURCES]: `
+אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך. 
+צור אינדקסים מפורטים של מקורות המוזכרים בטקסט בלבד.
 
+חוקים:
+- החזר אך ורק מקורות כתובים (ספרים, פרקים, פסוקים)
+- מקורות תנ"כים, מדרשיים או ספרות רבנית בלבד
+- אין להחזיר נושאים, רעיונות או שמות אנשים
+- כל term חייב להיות שם מקור ברור ומפורש בטקסט
+- אם אין מקורות בטקסט – החזר [] בלבד
+- אם אינך בטוח שהמונח מתאים – אל תחזיר אותו
+`.trim(),
+
+      [IndexType.TOPICS]: `
+אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך. 
+צור אינדקסים מפורטים של נושאים מהספר הנבחר.
+`.trim(),
+
+      [IndexType.PERSONS]: `
+אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך.
+צור אינדקס מפורט של שמות אישים המוזכרים בטקסט בלבד.
+
+חוקים:
+- החזר אך ורק שמות של בני אדם המוזכרים בטקסט
+- אין להחזיר מושגים, נושאים, מקומות או ספרים
+- אין להחזיר תארים כלליים (כגון "המחבר", "הרב")
+- אם אין שם פרטי ברור – אל תחזיר אותו
+- כל term חייב להיות שם של אדם אחד בלבד
+- אם אין אישים בטקסט – החזר [] בלבד
+- אם אינך בטוח שהמונח מתאים – אל תחזיר אותו
+`.trim()
+      ,
+    };
+
+    console.log(indexType);
+    return `${BASE_PROMPT}\n${prompts[indexType]}`;
   }
 
 }
@@ -90,27 +142,27 @@ export class GptService {
 
 
 
-  //   private buildPrompt(pages: Array<{ pageNumber: number; text: string }>, indexType: IndexType): string {
+//   private buildPrompt(pages: Array<{ pageNumber: number; text: string }>, indexType: IndexType): string {
 
-  //     const prompts: Record<IndexType, string> = {
-  //       [IndexType.SOURCES]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של מקורות (מקורות תנ"ך, מקורות תלמודיים וכו').
+//     const prompts: Record<IndexType, string> = {
+//       [IndexType.SOURCES]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של מקורות(מקורות תנ"ך, מקורות תלמודיים וכו').
 
-  // עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
+// עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
 
-  //       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
+//       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
 
-  //       [IndexType.TOPICS]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של נושאים.
+//       [IndexType.TOPICS]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של נושאים.
 
-  // עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
+// עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
 
-  //       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
+//       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
 
-  //       [IndexType.PERSONS]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של אישיים.
+//       [IndexType.PERSONS]: `אנא נתחו את מערך תוכן עמודי הספר הבא וצרו אינדקס מקיף של אישיים.
 
-  // עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
+// עצבו את התשובה כמערך JSON עם אובייקטים המכילים: term (המקור), pageNumbers (מערך מספרי העמודים היכן שהוא מופיע) ותיאור (הקשר קצר).
 
-  //       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
-  //     };
+//       לפי עמודים מערך תוכן הספר: ${JSON.stringify(pages)}`,
+//     };
 
-  //     return prompts[indexType];
-  //   }
+//     return prompts[indexType];
+//   }

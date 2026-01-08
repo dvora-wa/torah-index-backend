@@ -191,7 +191,7 @@ export class PdfService {
     return {
       pageCount: pdf.numPages,
       pages,
-    };
+    }; 
   }
 }
 

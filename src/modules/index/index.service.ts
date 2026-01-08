@@ -30,7 +30,7 @@ export class IndexService {
           chunk.text,
           indexType,
         );
-
+        console.log("terms:----"+terms+"/n---------------------");
         this.mergeTerms(indexMap, terms, chunk.pageMap);
       }
 
@@ -52,7 +52,7 @@ export class IndexService {
     let pagesPerChunk = Math.ceil((desiredChunkPercent / 100) * totalPages);
     if (pagesPerChunk < 1) pagesPerChunk = 1;
 
-    const chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
+    var chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
     let start = 0;
 
     while (start < totalPages) {
@@ -73,7 +73,7 @@ export class IndexService {
       const nextStart = end - overlapPages;
       start = nextStart > start ? nextStart : end; // מונע לולאה אינסופית
     }
-
+    console.log(chunks)
     return chunks;
   }
 
