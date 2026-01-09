@@ -46,7 +46,7 @@ export class IndexController {
     if (!body?.entries || !Array.isArray(body.entries)) {
       throw new BadRequestException('Invalid entries payload');
     }
-console.log(body.indexType)
+
     const paragraphs: Paragraph[] = [
       // כותרת ראשית
       new Paragraph({

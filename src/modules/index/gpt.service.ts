@@ -131,8 +131,6 @@ export class GptService {
 `.trim()
       ,
     };
-
-    console.log(indexType);
     return `${BASE_PROMPT}\n${prompts[indexType]}`;
   }
 

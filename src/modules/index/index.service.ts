@@ -30,8 +30,7 @@ export class IndexService {
           chunk.text,
           indexType,
         );
-        console.log("terms:----"+terms+"/n---------------------");
-        this.mergeTerms(indexMap, terms, chunk.pageMap);
+        this.mergeTerms(indexMap, terms, chunk.pageNumbers, chunk.pageMap);
       }
 
       return this.buildFinalIndex(indexMap, indexType);
@@ -43,39 +42,88 @@ export class IndexService {
 
   private buildChunks(
     pages: { pageNumber: number; text: string }[],
-    overlapPages = 0, // כמה עמודים לחפיפה בין chunks
-    desiredChunkPercent = 10,  // אחוז ספר לכל chunk       
+    overlapPages = 0 // כמה עמודים לחפיפה
   ): Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> {
 
     const totalPages = pages.length;
-    // חישוב מספר עמודים לכל chunk לפי אחוז
-    let pagesPerChunk = Math.ceil((desiredChunkPercent / 100) * totalPages);
-    if (pagesPerChunk < 1) pagesPerChunk = 1;
 
-    var chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
+    // חישוב ראשוני של מספר עמודים לכל chunk לפי אחוז דינמי
+    let desiredChunkPercent = this.getDynamicChunkPercent(totalPages);
+    let pagesPerChunk = Math.ceil((desiredChunkPercent / 100) * totalPages);
+
+    // הגבלת מינימום ומקסימום כדי לשמור chunks הגיוניים
+    const MIN_PAGES_PER_CHUNK = 5;
+    const MAX_PAGES_PER_CHUNK = 20;
+    pagesPerChunk = Math.max(MIN_PAGES_PER_CHUNK, pagesPerChunk);
+    pagesPerChunk = Math.min(MAX_PAGES_PER_CHUNK, pagesPerChunk);
+
+    const chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
+
     let start = 0;
 
     while (start < totalPages) {
       const end = Math.min(start + pagesPerChunk, totalPages);
-      const slice = pages.slice(start, end);
+      const chunkPages = pages.slice(start, end);
 
-      // מחזיקים מיפוי של עמודים למילים שלהם
+      const pageNumbers = chunkPages.map(p => p.pageNumber);
       const pageMap: { [key: number]: string } = {};
-      slice.forEach(p => (pageMap[p.pageNumber] = p.text));
+      chunkPages.forEach(p => pageMap[p.pageNumber] = p.text);
 
-      const chunkText = slice.map(p => `${p.pageNumber}: ${p.text}`).join('\n\n');
+      const text = chunkPages.map(p => p.text).join("\n\n");
 
-      const pageNumbers = slice.map(p => p.pageNumber);
+      chunks.push({ text, pageNumbers, pageMap });
 
-      chunks.push({ text: chunkText, pageNumbers, pageMap });
-
-      // מתקדמים ל-chunk הבא עם overlap
-      const nextStart = end - overlapPages;
-      start = nextStart > start ? nextStart : end; // מונע לולאה אינסופית
+      // חפיפה – מעבירים את התחלת ה־chunk הבא אחורה לפי overlapPages
+      start = end - overlapPages;
+      if (start < 0) start = 0; // הגנה על ספרים קטנים מאוד
+      if (start >= totalPages) break;
     }
-    console.log(chunks)
+
     return chunks;
   }
+
+  // פונקציה לאחוז דינמי לפי מספר העמודים בספר
+  private getDynamicChunkPercent(totalPages: number): number {
+    if (totalPages <= 30) return 25;   // ספרים קטנים – אחוז גדול
+    if (totalPages <= 100) return 10;  // ספרים בינוניים – אחוז סביר
+    if (totalPages <= 500) return 5;   // ספרים גדולים – אחוז קטן
+    return 3;                          // ספרים ענקיים – אחוז קטן מאוד
+  }
+
+  // private buildChunks(
+  //   pages: { pageNumber: number; text: string }[],
+  //   overlapPages = 0, // כמה עמודים לחפיפה בין chunks
+  //   desiredChunkPercent = 10,  // אחוז ספר לכל chunk       
+  // ): Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> {
+
+  //   const totalPages = pages.length;
+  //   // חישוב מספר עמודים לכל chunk לפי אחוז
+  //   let pagesPerChunk = Math.ceil((desiredChunkPercent / 100) * totalPages);
+  //   if (pagesPerChunk < 1) pagesPerChunk = 1;
+
+  //   var chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
+  //   let start = 0;
+
+  //   while (start < totalPages) {
+  //     const end = Math.min(start + pagesPerChunk, totalPages);
+  //     const slice = pages.slice(start, end);
+
+  //     // מחזיקים מיפוי של עמודים למילים שלהם
+  //     const pageMap: { [key: number]: string } = {};
+  //     slice.forEach(p => (pageMap[p.pageNumber] = p.text));
+
+  //     const chunkText = slice.map(p => `${p.pageNumber}: ${p.text}`).join('\n\n');
+
+  //     const pageNumbers = slice.map(p => p.pageNumber);
+
+  //     chunks.push({ text: chunkText, pageNumbers, pageMap });
+
+  //     // מתקדמים ל-chunk הבא עם overlap
+  //     const nextStart = end - overlapPages;
+  //     start = nextStart > start ? nextStart : end; // מונע לולאה אינסופית
+  //   }
+  //   return chunks;
+  // }
 
   private mergeTerms(
     indexMap: Map<
@@ -83,6 +131,7 @@ export class IndexService {
       { term: string; description?: string; pages: Set<number> }
     >,
     terms: { term: string; description?: string; pageHints?: number[] }[],
+    pageNumbers: number[],
     pageMap: { [key: number]: string },
   ) {
     for (const t of terms) {
@@ -104,21 +153,45 @@ export class IndexService {
       const entry = indexMap.get(normalizedKey)!;
 
       let pagesToAdd: number[] = [];
-
-      // 1️⃣ קודם משתמשים ב-pageHints אם קיימים
+      // ===============================
+      // 1️⃣ יש pageHints → מאמתים מול pageNumbers
+      // ===============================
       if (Array.isArray(t.pageHints) && t.pageHints.length > 0) {
-        pagesToAdd = t.pageHints.filter(p => typeof p === 'number');
+        const validPages = new Set(pageNumbers);
+
+        pagesToAdd = t.pageHints.filter(
+          p => typeof p === 'number' && validPages.has(p)
+        );
       }
-      // 2️⃣ אחרת – עוברים על pageMap כדי למצוא את העמודים בהם מופיע המונח
-      else if (pageMap && Object.keys(pageMap).length > 0) {
+
+      // ===============================
+      // 2️⃣ אין pageHints בכלל → fallback חיפוש בטקסט
+      // ===============================
+      else {
         for (const [pageNumStr, text] of Object.entries(pageMap)) {
-          const pageNum = parseInt(pageNumStr, 10);
           if (!text) continue;
+
           if (text.includes(t.term)) {
+            const pageNum = Number(pageNumStr);
             pagesToAdd.push(pageNum);
           }
         }
       }
+
+      // // 1️⃣ קודם משתמשים ב-pageHints אם קיימים
+      // if (Array.isArray(t.pageHints) && t.pageHints.length > 0) {
+      //   pagesToAdd = t.pageHints.filter(p => typeof p === 'number');
+      // }
+      // // 2️⃣ אחרת – עוברים על pageMap כדי למצוא את העמודים בהם מופיע המונח
+      // else if (pageMap && Object.keys(pageMap).length > 0) {
+      //   for (const [pageNumStr, text] of Object.entries(pageMap)) {
+      //     const pageNum = parseInt(pageNumStr, 10);
+      //     if (!text) continue;
+      //     if (text.includes(t.term)) {
+      //       pagesToAdd.push(pageNum);
+      //     }
+      //   }
+      // }
 
       // מוסיפים את העמודים ל-Set
       for (const p of pagesToAdd) {
