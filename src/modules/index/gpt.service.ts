@@ -41,9 +41,12 @@ export class GptService {
           ],
           temperature: 0,
           max_output_tokens: 1000,
-          response_format: {
-            type: "json_schema",
-            json_schema: this.getResponseFormat(indexType).json_schema
+          text: {
+            format: {
+              type: "json_schema",
+              schema: this.getResponseFormat(indexType),
+              strict: true
+            }
           }
         }),
       });
@@ -82,30 +85,20 @@ export class GptService {
 
   private getResponseFormat(indexType: IndexType) {
     return {
-      type: "json_schema",
-      json_schema: {
-        name: "index_terms",
-        schema: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              term: { type: "string" },
-              description: { type: "string" },
-              pageHints: {
-                type: "array",
-                items: { type: "number" }
-              }
-            },
-            required: ["term"],
-            additionalProperties: false
-          }
-        }
+      name: "index_terms",
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          term: { type: "string" },
+          description: { type: "string" },
+          pageHints: { type: "array", items: { type: "number" } }
+        },
+        required: ["term"],
+        additionalProperties: false
       }
     };
   }
-
-
 
   private getSystemPrompt(indexType: IndexType): string {
     const BASE_PROMPT = `
