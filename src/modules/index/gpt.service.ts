@@ -20,7 +20,6 @@ export class GptService {
     attempt = 1,
     maxAttempts = 3,
   ): Promise<{ term: string; description?: string; pageHints?: number[] }[]> {
-
     try {
       const response = await fetch(this.apiEndpoint, {
         method: 'POST',
@@ -42,20 +41,28 @@ export class GptService {
           ],
           temperature: 0,
           max_output_tokens: 1000,
+          response_format: this.getResponseFormat(indexType),
         }),
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenAI error: ${response.status} - ${errText}`);
+      }
+
       const data = await response.json();
 
-      const text =
-        data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text ?? '[]';
+      // מנסה להחזיר את התוצאה parsed לפי schema
+      if (data.output_parsed) return data.output_parsed;
 
-      const cleaned = text
-        .replace(/```json/gi, '')
-        .replace(/```/g, '')
-        .trim();
-
-      return JSON.parse(cleaned);
+      // fallback: אם output_parsed לא קיים או לא parse-able
+      const rawText = data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text ?? '[]';
+      try {
+        return JSON.parse(rawText);
+      } catch {
+        console.warn(`Fallback JSON parsing failed on attempt ${attempt}`);
+        return [];
+      }
 
     } catch (err) {
       console.error(`Analyze failed (attempt ${attempt})`, err);
@@ -65,9 +72,36 @@ export class GptService {
         return this.analyzeChunk(chunkText, indexType, attempt + 1, maxAttempts);
       }
 
+      // אחרי כל הניסיונות: החזרת מערך ריק
       return [];
     }
   }
+
+  private getResponseFormat(indexType: IndexType) {
+    return {
+      type: "json_schema",
+      json_schema: {
+        name: "index_terms",
+        schema: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              term: { type: "string" },
+              description: { type: "string" },
+              pageHints: {
+                type: "array",
+                items: { type: "number" }
+              }
+            },
+            required: ["term"],
+            additionalProperties: false
+          }
+        }
+      }
+    };
+  }
+
 
 
   private getSystemPrompt(indexType: IndexType): string {
@@ -77,26 +111,13 @@ export class GptService {
 טקסט...
 
 אתה עורך אינדקס מקצועי.
-עליך:
- לזהות מונחים רלוונטיים ולהחזיר במערך JSON בלבד:
- החזר פלט בפורמט JSON תקני בלבד.
-אין לעטוף את הפלט ב־גרשיים וכו או בבלוק קוד.
-      אין להוסיף הסברים, טקסט חופשי או הערות.
-      הפלט חייב להיות מערך JSON בלבד, שניתן לפענוח ישיר באמצעות JSON.parse().
-              [
-        {
-          "term": "string",
-          "description": "string | null",
-          "pageHints": number[]
-        }
-      ]
-        אם אינך בטוח ב־100% שהמונח מתאים לסוג האינדקס – אל תחזיר אותו.
-              אסור להחזיר טקסט חופשי.
-              אם אין מונחים – החזר[]
+עליך לזהות מונחים רלוונטיים בלבד לפי כללי האינדקס.
 
-העמודים הם רמז בלבד.אל תנחש עמודים שלא מופיעים בטקסט.
-`.trim();;
-
+חוקים כלליים:
+- אם אינך בטוח ב־100% בהתאמת המונח – אל תחזיר אותו
+- אם אין מונחים מתאימים – אל תחזיר כלום
+- העמודים הם רמז בלבד – אל תנחש עמודים שלא מופיעים בטקסט
+`.trim();
     const prompts: Record<IndexType, string> = {
       [IndexType.SOURCES]: `
 אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך. 
