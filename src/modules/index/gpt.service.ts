@@ -41,8 +41,8 @@ export class GptService {
           ],
           temperature: 0,
           max_output_tokens: 1000,
-          text: {
-            format: "json_schema",
+          response_format: {
+            type: "json_schema",
             json_schema: this.getResponseFormat(indexType).json_schema
           }
         }),
