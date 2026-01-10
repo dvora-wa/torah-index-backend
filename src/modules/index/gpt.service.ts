@@ -43,8 +43,9 @@ export class GptService {
           max_output_tokens: 1000,
           text: {
             format: {
+              name: "index_terms",                // <-- חייב להיות כאן
               type: "json_schema",
-              schema: this.getResponseFormat(indexType),
+              schema: this.getResponseFormat(indexType).items ? this.getResponseFormat(indexType) : undefined,
               strict: true
             }
           }
@@ -85,7 +86,6 @@ export class GptService {
 
   private getResponseFormat(indexType: IndexType) {
     return {
-      name: "index_terms",
       type: "array",
       items: {
         type: "object",
