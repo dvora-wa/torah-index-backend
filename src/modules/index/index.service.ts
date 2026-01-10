@@ -69,18 +69,21 @@ export class IndexService {
       const pageMap: { [key: number]: string } = {};
       chunkPages.forEach(p => pageMap[p.pageNumber] = p.text);
 
-      const text = chunkPages.map(p => p.text).join("\n\n");
+      const text = chunkPages
+        .map(p => `[Page ${p.pageNumber}]\n${p.text}`)
+        .join("\n\n");
 
       chunks.push({ text, pageNumbers, pageMap });
 
-      // חפיפה – מעבירים את התחלת ה־chunk הבא אחורה לפי overlapPages
-      start = end - overlapPages;
-      if (start < 0) start = 0; // הגנה על ספרים קטנים מאוד
-      if (start >= totalPages) break;
+      // מתקדמים ל-chunk הבא עם overlap
+      const nextStart = end - overlapPages;
+      start = nextStart > start ? nextStart : end; // מונע לולאה אינסופית
     }
 
     return chunks;
   }
+
+
 
   // פונקציה לאחוז דינמי לפי מספר העמודים בספר
   private getDynamicChunkPercent(totalPages: number): number {
