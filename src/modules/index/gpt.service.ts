@@ -45,13 +45,15 @@ export class GptService {
             format: {
               name: "index_terms",                // <-- חייב להיות כאן
               type: "json_schema",
-              schema: this.getResponseFormat(indexType).items ? this.getResponseFormat(indexType) : undefined,
+              schema: this.getResponseFormat(indexType)
+                // .items 
+                ? this.getResponseFormat(indexType) : undefined,
               strict: true
             }
           }
         }),
       });
-
+      // ------------------ object שנתי ל - ואז בתוכו יש מערך עם כל הפרטים --- אז צריך לשנות שכאשר שולחים את שתשובה של ה AI לעשות נקודה למערך.
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`OpenAI error: ${response.status} - ${errText}`);
@@ -60,12 +62,21 @@ export class GptService {
       const data = await response.json();
 
       // מנסה להחזיר את התוצאה parsed לפי schema
-      if (data.output_parsed) return data.output_parsed;
+      if (data.output_parsed?.index_terms) {
+        return data.output_parsed.index_terms;
+      }
 
       // fallback: אם output_parsed לא קיים או לא parse-able
-      const rawText = data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text ?? '[]';
+      const rawText =
+        data.output?.[0]?.content?.find(c => c.type === 'output_text')?.text ?? '{}';
       try {
-        return JSON.parse(rawText);
+        const parsed = JSON.parse(rawText);
+
+        if (parsed?.index_terms) {
+          return parsed.index_terms;
+        }
+
+        return [];
       } catch {
         console.warn(`Fallback JSON parsing failed on attempt ${attempt}`);
         return [];
@@ -86,17 +97,25 @@ export class GptService {
 
   private getResponseFormat(indexType: IndexType) {
     return {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          term: { type: "string" },
-          description: { type: "string" },
-          pageHints: { type: "array", items: { type: "number" } }
-        },
-        required: ["term"],
-        additionalProperties: false
-      }
+      name: "index_terms",
+      type: "object",
+      properties: {
+        index_terms: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              term: { type: "string" },
+              description: { type: "string" },
+              pageHints: { type: "array", items: { type: "number" } }
+            },
+            required: ["term"],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ["index_terms"],
+      additionalProperties: false
     };
   }
 
