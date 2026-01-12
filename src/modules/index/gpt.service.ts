@@ -106,15 +106,15 @@ export class GptService {
             type: "object",
             properties: {
               term: { type: "string" },
-              description: { type: ["string" ,"null"]},
-              pageHints: { type:[ "array","null"], items: { type: "number" } }
+              description: { type: ["string", "null"] },
+              pageHints: { type: ["array", "null"], items: { type: "number" } }
             },
-            required: ["term"],
+            required: ["term", "description", "pageHints"],
             additionalProperties: false
           }
         }
       },
-      required: ["term", "description", "pageHints"],
+      required: ["index_terms"],
       additionalProperties: false
     };
   }
