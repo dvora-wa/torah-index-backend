@@ -53,7 +53,7 @@ export class GptService {
           }
         }),
       });
-      // ------------------ object שנתי ל - ואז בתוכו יש מערך עם כל הפרטים --- אז צריך לשנות שכאשר שולחים את שתשובה של ה AI לעשות נקודה למערך.
+
       if (!response.ok) {
         const errText = await response.text();
         throw new Error(`OpenAI error: ${response.status} - ${errText}`);
@@ -106,15 +106,15 @@ export class GptService {
             type: "object",
             properties: {
               term: { type: "string" },
-              description: { type: "string" },
-              pageHints: { type: "array", items: { type: "number" } }
+              description: { type: ["string" ,"null"]},
+              pageHints: { type:[ "array","null"], items: { type: "number" } }
             },
             required: ["term"],
             additionalProperties: false
           }
         }
       },
-      required: ["index_terms"],
+      required: ["term", "description", "pageHints"],
       additionalProperties: false
     };
   }
