@@ -14,11 +14,14 @@ export class IndexService {
   async generateIndexFromFile(
     filePath: string,
     indexType: IndexType,
+    fromPage?: number,
+    toPage?: number,
   ): Promise<GeneratedIndex> {
     try {
       const pdfContent = await this.pdfService.extractText(filePath);
+      const pages = this.filterPagesByRange(pdfContent.pages, fromPage, toPage);
       const overlapPages = indexType === IndexType.TOPICS ? 1 : 0;
-      const chunks = this.buildChunks(pdfContent.pages, overlapPages);
+      const chunks = this.buildChunks(pages, overlapPages);
 
       const indexMap = new Map<
         string,
@@ -57,6 +60,25 @@ export class IndexService {
       this.cleanupFile(filePath);
     }
   }
+
+  private filterPagesByRange(
+    pages: { pageNumber: number; text: string }[],
+    fromPage?: number,
+    toPage?: number
+  ) {
+    if (!fromPage && !toPage) return pages;
+
+    if (fromPage && toPage && fromPage > toPage) {
+      throw new Error('fromPage cannot be greater than toPage');
+    }
+
+    return pages.filter(p => {
+      if (fromPage && p.pageNumber < fromPage) return false;
+      if (toPage && p.pageNumber > toPage) return false;
+      return true;
+    });
+  }
+
 
   private buildChunks(
     pages: { pageNumber: number; text: string }[],

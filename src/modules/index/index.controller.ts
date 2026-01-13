@@ -23,12 +23,19 @@ export class IndexController {
     }),
   )
   @HttpCode(HttpStatus.OK)
-  async generateIndex(@UploadedFile() file: any, @Body('indexType') indexType: IndexType): Promise<IndexResponseDto> {
+  async generateIndex(@UploadedFile() file: any,
+    @Body('indexType') indexType: IndexType,
+    @Body('fromPage') fromPage?: string,
+    @Body('toPage') toPage?: string,): Promise<IndexResponseDto> {
     if (!file) throw new BadRequestException('No file uploaded');
     if (!Object.values(IndexType).includes(indexType)) throw new BadRequestException('Invalid index type');
 
     try {
-      const generatedIndex = await this.indexService.generateIndexFromFile(file.path, indexType);
+      const generatedIndex = await this.indexService.generateIndexFromFile(
+        file.path,
+        indexType,
+        fromPage ? Number(fromPage) : undefined,
+        toPage ? Number(toPage) : undefined,);
       const previewEntries = this.indexService.getPreviewEntries(generatedIndex.entries, 5);
 
       return { success: true, data: generatedIndex, message: `${indexType} index generated successfully`, previewEntries };
