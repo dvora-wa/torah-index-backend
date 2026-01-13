@@ -25,13 +25,31 @@ export class IndexService {
         { term: string; description?: string; pages: Set<number> }
       >();
 
-      for (const chunk of chunks) {
-        const terms = await this.gptService.analyzeChunk(// ----------צריך להוסיף כאן קוד כדי שיעבוד יותר יעיל-------
-          chunk.text,
-          indexType,
-        );
-        this.mergeTerms(indexMap, terms, chunk.pageNumbers, chunk.pageMap);
-      }
+      await this.runWithConcurrency(
+        chunks,
+        3, // 👈 מספר קריאות מקביליות (2–4 זה sweet spot)
+        async (chunk) => {
+          const terms = await this.gptService.analyzeChunk(
+            chunk.text,
+            indexType,
+          );
+
+          this.mergeTerms(
+            indexMap,
+            terms,
+            chunk.pageNumbers,
+            chunk.pageMap
+          );
+        }
+      );
+
+      // for (const chunk of chunks) {
+      //   const terms = await this.gptService.analyzeChunk(// ----------צריך להוסיף כאן קוד כדי שיעבוד יותר יעיל-------
+      //     chunk.text,
+      //     indexType,
+      //   );
+      //   this.mergeTerms(indexMap, terms, chunk.pageNumbers, chunk.pageMap);
+      // }
 
       return this.buildFinalIndex(indexMap, indexType);
     }
@@ -127,6 +145,31 @@ export class IndexService {
   //   }
   //   return chunks;
   // }
+
+  async runWithConcurrency<T>(
+    items: T[],
+    limit: number,
+    worker: (item: T) => Promise<void>
+  ) {
+    const queue = [...items];
+    const workers: Promise<void>[] = [];
+
+    async function run() {
+      while (queue.length) {
+        const item = queue.shift();
+        if (!item) return;
+        await worker(item);
+      }
+    }
+
+    for (let i = 0; i < limit; i++) {
+      workers.push(run());
+    }
+
+    await Promise.all(workers);
+  }
+
+
 
   private mergeTerms(
     indexMap: Map<
