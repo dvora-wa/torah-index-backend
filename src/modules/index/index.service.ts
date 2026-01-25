@@ -2,13 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { GptService } from './gpt.service';
 import { IndexType, IndexEntry, GeneratedIndex, TextChunk } from './types';
 import * as fs from 'fs';
-import { PdfContent, PdfService } from '../pdf/pdf.service';
+import { PdfService } from '../pdf/pdf.service';
+import { PromptConfigService } from '../../config/prompt-config.service';
+
 
 @Injectable()
 export class IndexService {
   constructor(
     private gptService: GptService,
     private pdfService: PdfService,
+    private promptConfig: PromptConfigService,
   ) { }
 
   async generateIndexFromFile(
@@ -20,8 +23,9 @@ export class IndexService {
     try {
       const pdfContent = await this.pdfService.extractText(filePath);
       const pages = this.filterPagesByRange(pdfContent.pages, fromPage, toPage);
-      const overlapPages = indexType === IndexType.TOPICS ? 1 : 0;
-      const chunks = this.buildChunks(pages, overlapPages);
+      const pagesPerChunk = this.promptConfig.getChunkSize();
+      const overlapPages = this.promptConfig.getOverlapPages();
+      const chunks = this.buildChunks(pages, pagesPerChunk, overlapPages);
 
       const indexMap = new Map<
         string,
@@ -82,21 +86,11 @@ export class IndexService {
 
   private buildChunks(
     pages: { pageNumber: number; text: string }[],
-    overlapPages = 0 // כמה עמודים לחפיפה
+    pagesPerChunk: number,
+    overlapPages: number
   ): Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> {
 
     const totalPages = pages.length;
-
-    // חישוב ראשוני של מספר עמודים לכל chunk לפי אחוז דינמי
-    let desiredChunkPercent = this.getDynamicChunkPercent(totalPages);
-    let pagesPerChunk = Math.ceil((desiredChunkPercent / 100) * totalPages);
-
-    // הגבלת מינימום ומקסימום כדי לשמור chunks הגיוניים
-    const MIN_PAGES_PER_CHUNK = 5;
-    const MAX_PAGES_PER_CHUNK = 20;
-    pagesPerChunk = Math.max(MIN_PAGES_PER_CHUNK, pagesPerChunk);
-    pagesPerChunk = Math.min(MAX_PAGES_PER_CHUNK, pagesPerChunk);
-
     const chunks: Array<{ text: string; pageNumbers: number[]; pageMap: { [key: number]: string } }> = [];
 
     let start = 0;
@@ -121,14 +115,6 @@ export class IndexService {
     }
 
     return chunks;
-  }
-
-  // פונקציה לאחוז דינמי לפי מספר העמודים בספר
-  private getDynamicChunkPercent(totalPages: number): number {
-    if (totalPages <= 30) return 25;   // ספרים קטנים – אחוז גדול
-    if (totalPages <= 100) return 10;  // ספרים בינוניים – אחוז סביר
-    if (totalPages <= 500) return 5;   // ספרים גדולים – אחוז קטן
-    return 3;                          // ספרים ענקיים – אחוז קטן מאוד
   }
 
   async runWithConcurrency<T>(

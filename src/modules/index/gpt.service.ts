@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IndexType, IndexEntry, GeneratedIndex } from './types';
+import { PromptConfigService } from 'src/config/prompt-config.service';
 
 @Injectable()
 export class GptService {
   private openaiApiKey: string;
   private apiEndpoint = 'https://api.openai.com/v1/responses';
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private promptConfig: PromptConfigService,
+  ) {
     this.openaiApiKey = this.configService.get<string>('OPENAI_API_KEY')!;
     if (!this.openaiApiKey) {
       throw new Error('OPENAI_API_KEY environment variable is not set');
@@ -20,6 +24,10 @@ export class GptService {
     attempt = 1,
     maxAttempts = 3,
   ): Promise<{ term: string; description?: string; pageHints?: number[] }[]> {
+    const systemPrompt =
+      this.promptConfig.getBasePrompt() +
+      '\n\n' +
+      this.promptConfig.getPromptByType(indexType.toLowerCase() as any);
     try {
       const response = await fetch(this.apiEndpoint, {
         method: 'POST',
@@ -32,7 +40,7 @@ export class GptService {
           input: [
             {
               role: 'system',
-              content: [{ type: 'input_text', text: this.getSystemPrompt(indexType) }],
+              content: [{ type: 'input_text', text: systemPrompt }],
             },
             {
               role: 'user',
@@ -118,68 +126,6 @@ export class GptService {
       additionalProperties: false
     };
   }
-
-  private getSystemPrompt(indexType: IndexType): string {
-    const BASE_PROMPT = `
-הטקסט כולל מקטעים בפורמט:
-[Page X]
-טקסט...
-
-אתה עורך אינדקס מקצועי.
-עליך לזהות מונחים רלוונטיים בלבד לפי כללי האינדקס.
-
-חוקים כלליים:
-- אם אינך בטוח ב־100% בהתאמת המונח – אל תחזיר אותו
-- אם אין מונחים מתאימים – אל תחזיר כלום
-- העמודים הם רמז בלבד – אל תנחש עמודים שלא מופיעים בטקסט
-`.trim();
-    const prompts: Record<IndexType, string> = {
-      [IndexType.SOURCES]: `
-אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך. 
-צור אינדקסים מפורטים של מקורות המוזכרים בטקסט בלבד.
-
-חוקים:
-- החזר אך ורק מקורות כתובים (ספרים, פרקים, פסוקים)
-- מקורות תנ"כים, מדרשיים או ספרות רבנית בלבד
-- אין להחזיר נושאים, רעיונות או שמות אנשים
-- כל term חייב להיות שם מקור ברור ומפורש בטקסט
-- אם אין מקורות בטקסט – החזר [] בלבד
-- אם אינך בטוח שהמונח מתאים – אל תחזיר אותו
-`.trim(),
-
-      [IndexType.TOPICS]: `
-אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך.
-צור אינדקס מפורט של נושאים מושגיים בלבד המוזכרים בטקסט.
-
-חוקים מחייבים:
-- החזר אך ורק נושאים רעיוניים / מושגיים
-- ❌ אסור להחזיר שמות של בני אדם מכל סוג
-- ❌ אסור להחזיר שמות של רבנים, מחברים או דמויות מקראיות
-- ❌ אסור להחזיר ספרים, מקורות או מקומות
-- ❌ אסור להחזיר שמות פרטיים או משפחה
-- אם מונח יכול להתפרש כאדם – אל תחזיר אותו
-- כל term חייב להיות מושג מופשט (רעיון, עיקרון, תהליך, תכונה)
-- אם אין נושאים – החזר [] בלבד
-`.trim(),
-
-      [IndexType.PERSONS]: `
-אתה מומחה בניתוח טקסטים של ספרי מחברים יהודיים על התנ"ך.
-צור אינדקס מפורט של שמות אישים המוזכרים בטקסט בלבד.
-
-חוקים:
-- החזר אך ורק שמות של בני אדם המוזכרים בטקסט
-- אין להחזיר מושגים, נושאים, מקומות או ספרים
-- אין להחזיר תארים כלליים (כגון "המחבר", "הרב")
-- אם אין שם פרטי ברור – אל תחזיר אותו
-- כל term חייב להיות שם של אדם אחד בלבד
-- אם אין אישים בטקסט – החזר [] בלבד
-- אם אינך בטוח שהמונח מתאים – אל תחזיר אותו
-`.trim()
-      ,
-    };
-    return `${BASE_PROMPT}\n${prompts[indexType]}`;
-  }
-
 }
 
 
