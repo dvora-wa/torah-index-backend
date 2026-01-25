@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IndexType, IndexEntry, GeneratedIndex } from './types';
-import { PromptConfigService } from 'src/config/prompt-config.service';
+import { PromptConfigService } from '../../config/prompt-config.service';
 
 @Injectable()
 export class GptService {

@@ -3,8 +3,7 @@ import { IndexController } from './index.controller';
 import { IndexService } from './index.service';
 import { PdfModule } from '../pdf/pdf.module';
 import { GptService } from './gpt.service';
-import { PromptConfigModule } from 'src/config/prompt-config.module';
-
+import { PromptConfigModule } from '../../config/prompt-config.module';
 
 @Module({
   imports: [PdfModule, PromptConfigModule],
