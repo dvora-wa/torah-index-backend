@@ -65,6 +65,7 @@ export class IndexController {
             text: `מפתח ${body.indexType}`,
             bold: true,
             size: 32,
+            rightToLeft: true
           }),
         ],
       }),
@@ -112,6 +113,9 @@ export class IndexController {
     const doc = new Document({
       sections: [
         {
+          // properties: {
+          //   bidi: true,  // ✅ RTL ברמת section
+          // },
           children: paragraphs,
         },
       ],
