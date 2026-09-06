@@ -71,9 +71,4 @@ OPENAI_API_KEY=your-key-here
 
 ## Future Development / Roadmap
 
-Ideas for continuing the project:
-
-- Support for additional export formats (PDF, Excel).
-- Caching of processed documents to avoid re-analyzing the same book.
-- A job queue for very large documents instead of processing in a single request.
-- Automated tests covering the chunking and merging logic.
+- **Evaluate output quality** — verify that the AI reliably extracts the correct, meaningful index terms, and that the generated index is accurate and genuinely useful in practice.
